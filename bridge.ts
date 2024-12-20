@@ -35,16 +35,15 @@ async function searchDMM(tmdbId: string, title: string) {
   
   try {
     // Navigate to DMM
-    await page.goto(DMM_URL);
+    await page.goto(DMM_URL!);
     
     // Wait for and click the login button (you'll need to adjust these selectors)
     await page.waitForSelector('button[type="submit"]');
     await page.click('button[type="submit"]');
     
     // Set the auth token (you might need to adjust this based on DMM's authentication method)
-    await page.evaluate((authToken: string) => {
-      localStorage.setItem('token', authToken);
-    }, DMM_TOKEN);
+    const token = DMM_TOKEN!;
+    await page.evaluate(`localStorage.setItem('token', '${token}')`);
     
     // Navigate to search with the TMDB ID
     await page.goto(`${DMM_URL}/search?tmdbId=${tmdbId}&title=${encodeURIComponent(title)}`);
