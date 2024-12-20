@@ -85,34 +85,38 @@ async function searchDMM(tmdbId: string, title: string) {
     await page.goto(DMM_URL!, { waitUntil: 'networkidle0' });
     await setupAuth(page);
     
-    // Refresh the page to apply auth
-    await page.reload({ waitUntil: 'networkidle0' });
-    
-    const searchUrl = `${DMM_URL}/search?tmdbId=${tmdbId}&title=${encodeURIComponent(title)}`;
-    console.log(`Navigating to search: ${searchUrl}`);
-    await page.goto(searchUrl, {
-      waitUntil: 'networkidle0',
-      timeout: 30000
-    });
-    
-    console.log('Waiting for search results...');
-    const searchResults = await page.waitForSelector('.search-results', {
-      timeout: 5000
-    }).catch(() => null);
-
-    if (!searchResults) {
-      console.log('Search results not found. Current URL:', page.url());
-      console.log('Page content:', await page.content());
-      throw new Error('Search results not found');
+    // Wait for the search input to be available
+    console.log('Waiting for search input...');
+    const searchInput = await page.waitForSelector('input[placeholder="Search movies & shows..."]');
+    if (!searchInput) {
+      throw new Error('Search input not found');
     }
+
+    // Type the search query
+    await searchInput.type(title);
     
-    console.log('Clicking first search result...');
-    const firstResult = await page.waitForSelector('.search-result-item', {
+    // Click the search button
+    console.log('Submitting search...');
+    const searchButton = await page.waitForSelector('button[type="submit"]');
+    if (!searchButton) {
+      throw new Error('Search button not found');
+    }
+    await searchButton.click();
+
+    // Wait for search results
+    console.log('Waiting for search results...');
+    await page.waitForSelector('.search-results', {
+      timeout: 10000
+    });
+
+    // Click the first result that matches our TMDB ID
+    console.log('Looking for matching result...');
+    const firstResult = await page.waitForSelector(`[data-tmdb-id="${tmdbId}"]`, {
       timeout: 5000
-    }).catch(() => null);
+    });
 
     if (!firstResult) {
-      throw new Error('No search results found');
+      throw new Error('No matching search result found');
     }
 
     await firstResult.click();
