@@ -37,51 +37,34 @@ async function initBrowser() {
   return browser;
 }
 
-interface AuthData {
-  accessToken: string;
-  refreshToken: string;
-  clientId: string;
-  clientSecret: string;
-}
-
-// Add type checking for environment variables
-if (!process.env.RD_ACCESS_TOKEN) throw new Error('RD_ACCESS_TOKEN is required');
-if (!process.env.RD_REFRESH_TOKEN) throw new Error('RD_REFRESH_TOKEN is required');
-if (!process.env.RD_CLIENT_ID) throw new Error('RD_CLIENT_ID is required');
-if (!process.env.RD_CLIENT_SECRET) throw new Error('RD_CLIENT_SECRET is required');
-
-const authData: AuthData = {
-  accessToken: process.env.RD_ACCESS_TOKEN,
-  refreshToken: process.env.RD_REFRESH_TOKEN,
-  clientId: process.env.RD_CLIENT_ID,
-  clientSecret: process.env.RD_CLIENT_SECRET
-};
-
 async function setupAuth(page: puppeteer.Page) {
   console.log('Setting up authentication...');
   
-  // Set the required localStorage values
-  await page.evaluate((data: AuthData) => {
-    localStorage.setItem('rd:accessToken', JSON.stringify({
-      value: data.accessToken,
-      expiry: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days from now
-    }));
-    localStorage.setItem('rd:refreshToken', data.refreshToken);
-    localStorage.setItem('rd:clientId', data.clientId);
-    localStorage.setItem('rd:clientSecret', data.clientSecret);
+  // Calculate token expiry (30 days from now)
+  const expiryDate = Date.now() + (30 * 24 * 60 * 60 * 1000);
+  
+  const authData = {
+    'rd:accessToken': JSON.stringify({
+      value: RD_ACCESS_TOKEN,
+      expiry: expiryDate
+    }),
+    'rd:refreshToken': RD_REFRESH_TOKEN,
+    'rd:clientId': RD_CLIENT_ID,
+    'rd:clientSecret': RD_CLIENT_SECRET
+  };
+
+  if (RD_CAST_TOKEN) {
+    authData['rd:castToken'] = RD_CAST_TOKEN;
+  }
+
+  // Set all auth data in localStorage
+  await page.evaluate((data) => {
+    for (const [key, value] of Object.entries(data)) {
+      localStorage.setItem(key, value);
+    }
   }, authData);
   
-  // Reload the page to apply authentication
-  console.log('Reloading page to apply authentication...');
-  await page.reload({ waitUntil: 'networkidle0' });
-  
-  // Wait for the authenticated state
-  console.log('Waiting for authenticated state...');
-  await page.waitForFunction(() => {
-    return !document.querySelector('button:has-text("Login with Real Debrid")');
-  }, { timeout: 10000 });
-
-  console.log('Authentication completed successfully');
+  console.log('Authentication data set successfully');
 }
 
 async function searchDMM(tmdbId: string, title: string) {
@@ -90,55 +73,38 @@ async function searchDMM(tmdbId: string, title: string) {
   const page = await browser.newPage();
   
   try {
-    // First navigate and authenticate
+    // First set up authentication
     await page.goto(DMM_URL!, { waitUntil: 'networkidle0' });
     await setupAuth(page);
     
-    // Wait a moment for the UI to stabilize
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Refresh the page to apply auth
+    await page.reload({ waitUntil: 'networkidle0' });
     
-    // Now look for the search input
-    console.log('Waiting for search input...');
-    const searchInput = await page.waitForSelector('input[placeholder="Search movies & shows..."]', {
-      visible: true,
-      timeout: 10000
+    const searchUrl = `${DMM_URL}/search?tmdbId=${tmdbId}&title=${encodeURIComponent(title)}`;
+    console.log(`Navigating to search: ${searchUrl}`);
+    await page.goto(searchUrl, {
+      waitUntil: 'networkidle0',
+      timeout: 30000
     });
     
-    if (!searchInput) {
-      throw new Error('Search input not found');
-    }
-
-    // Type the search query
-    await searchInput.type(title);
-    
-    // Click the search button
-    console.log('Submitting search...');
-    const searchButton = await page.waitForSelector('button[type="submit"]', {
-      visible: true,
-      timeout: 5000
-    });
-    
-    if (!searchButton) {
-      throw new Error('Search button not found');
-    }
-    await searchButton.click();
-
-    // Wait for search results
     console.log('Waiting for search results...');
-    await page.waitForSelector('.search-results', {
-      visible: true,
-      timeout: 10000
-    });
-
-    // Click the first result that matches our TMDB ID
-    console.log('Looking for matching result...');
-    const firstResult = await page.waitForSelector(`[data-tmdb-id="${tmdbId}"]`, {
-      visible: true,
+    const searchResults = await page.waitForSelector('.search-results', {
       timeout: 5000
-    });
+    }).catch(() => null);
+
+    if (!searchResults) {
+      console.log('Search results not found. Current URL:', page.url());
+      console.log('Page content:', await page.content());
+      throw new Error('Search results not found');
+    }
+    
+    console.log('Clicking first search result...');
+    const firstResult = await page.waitForSelector('.search-result-item', {
+      timeout: 5000
+    }).catch(() => null);
 
     if (!firstResult) {
-      throw new Error('No matching search result found');
+      throw new Error('No search results found');
     }
 
     await firstResult.click();
