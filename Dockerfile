@@ -7,7 +7,7 @@ COPY tsconfig.json ./
 COPY bridge.ts ./
 
 # Install dependencies (production only)
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Install TypeScript globally and compile
 RUN npm install -g typescript
