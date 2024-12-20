@@ -45,6 +45,13 @@ interface AuthData {
   'rd:castToken'?: string;
 }
 
+const authData = {
+  accessToken: process.env.RD_ACCESS_TOKEN,
+  refreshToken: process.env.RD_REFRESH_TOKEN,
+  clientId: process.env.RD_CLIENT_ID,
+  clientSecret: process.env.RD_CLIENT_SECRET
+};
+
 async function setupAuth(page: puppeteer.Page) {
   console.log('Setting up authentication...');
   
@@ -83,7 +90,7 @@ async function searchDMM(tmdbId: string, title: string) {
     await setupAuth(page);
     
     // Wait a moment for the UI to stabilize
-    await page.waitForTimeout(2000);
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Now look for the search input
     console.log('Waiting for search input...');
