@@ -85,19 +85,37 @@ async function searchDMM(tmdbId: string, title: string) {
     await page.goto(DMM_URL!, { waitUntil: 'networkidle0' });
     await setupAuth(page);
     
-    // Wait for the search input to be available
+    // Wait for the page to be fully loaded
+    await page.waitForSelector('body', { timeout: 5000 });
+    
+    // Debug: Log the current URL and page content
+    console.log('Current URL:', await page.url());
+    const pageContent = await page.content();
+    console.log('Page content:', pageContent);
+
+    // Wait for the search input with a more specific selector
     console.log('Waiting for search input...');
-    const searchInput = await page.waitForSelector('input[placeholder="Search movies & shows..."]');
+    const searchInput = await page.waitForSelector('input[type="text"][placeholder="Search movies & shows..."]', {
+      visible: true,
+      timeout: 10000
+    });
+    
     if (!searchInput) {
       throw new Error('Search input not found');
     }
 
-    // Type the search query
+    // Clear any existing text and type the search query
+    await searchInput.click({ clickCount: 3 }); // Select all existing text
+    await searchInput.press('Backspace'); // Clear the selection
     await searchInput.type(title);
     
     // Click the search button
     console.log('Submitting search...');
-    const searchButton = await page.waitForSelector('button[type="submit"]');
+    const searchButton = await page.waitForSelector('button[type="submit"]', {
+      visible: true,
+      timeout: 5000
+    });
+    
     if (!searchButton) {
       throw new Error('Search button not found');
     }
@@ -106,12 +124,14 @@ async function searchDMM(tmdbId: string, title: string) {
     // Wait for search results
     console.log('Waiting for search results...');
     await page.waitForSelector('.search-results', {
+      visible: true,
       timeout: 10000
     });
 
     // Click the first result that matches our TMDB ID
     console.log('Looking for matching result...');
     const firstResult = await page.waitForSelector(`[data-tmdb-id="${tmdbId}"]`, {
+      visible: true,
       timeout: 5000
     });
 
