@@ -19,24 +19,24 @@ console.log(`Overseerr URL: ${OVERSEERR_URL}`);
 
 app.post('/webhook', async (req, res) => {
   console.log('Received webhook:', req.body);
-  const { notification, media } = req.body;
+  const { notification_type, media } = req.body;
   
-  if (notification.type === 'MEDIA_APPROVED') {
-    console.log(`Processing approved ${media.mediaType}: ${media.imdbId}`);
+  if (notification_type === 'MEDIA_AUTO_APPROVED' || notification_type === 'MEDIA_APPROVED') {
+    console.log(`Processing ${notification_type} for media:`, media);
     try {
       // Handle movie requests
-      if (media.mediaType === 'movie') {
-        console.log(`Sending movie request to DMM for IMDB ID: ${media.imdbId}`);
-        await axios.get(`${DMM_URL}/movie/${media.imdbId}`, {
+      if (media.media_type === 'movie') {
+        console.log(`Sending movie request to DMM for TMDB ID: ${media.tmdbId}`);
+        await axios.get(`${DMM_URL}/movie/${media.tmdbId}`, {
           headers: {
             Authorization: `Bearer ${DMM_TOKEN}`
           }
         });
       }
       // Handle TV show requests
-      else if (media.mediaType === 'tv') {
-        console.log(`Sending TV show request to DMM for IMDB ID: ${media.imdbId}`);
-        await axios.get(`${DMM_URL}/show/${media.imdbId}`, {
+      else if (media.media_type === 'tv') {
+        console.log(`Sending TV show request to DMM for TMDB ID: ${media.tmdbId}`);
+        await axios.get(`${DMM_URL}/show/${media.tmdbId}`, {
           headers: {
             Authorization: `Bearer ${DMM_TOKEN}`
           }
@@ -50,7 +50,7 @@ app.post('/webhook', async (req, res) => {
       res.status(500).json({ error: 'Failed to process request' });
     }
   } else {
-    console.log(`Ignoring notification of type: ${notification.type}`);
+    console.log(`Ignoring notification of type: ${notification_type}`);
     res.status(200).json({ success: true });
   }
 });
