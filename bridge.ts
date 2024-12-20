@@ -21,42 +21,90 @@ let browser: puppeteer.Browser | null = null;
 
 async function initBrowser() {
   if (!browser) {
+    console.log('Initializing browser...');
     browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ],
       headless: true
     });
+    console.log('Browser initialized successfully');
   }
   return browser;
 }
 
 async function searchDMM(tmdbId: string, title: string) {
+  console.log('Starting DMM search process...');
   const browser = await initBrowser();
   const page = await browser.newPage();
   
   try {
-    // Navigate to DMM
-    await page.goto(DMM_URL!);
+    console.log(`Navigating to DMM: ${DMM_URL}`);
+    const response = await page.goto(DMM_URL!, {
+      waitUntil: 'networkidle0',
+      timeout: 30000
+    });
     
-    // Wait for and click the login button (you'll need to adjust these selectors)
-    await page.waitForSelector('button[type="submit"]');
-    await page.click('button[type="submit"]');
+    if (!response) {
+      throw new Error('Failed to get response from DMM');
+    }
     
-    // Set the auth token (you might need to adjust this based on DMM's authentication method)
+    console.log('Looking for login button...');
+    const submitButton = await page.waitForSelector('button[type="submit"]', {
+      timeout: 5000
+    }).catch(() => null);
+
+    if (!submitButton) {
+      console.log('Login button not found, attempting to proceed without login...');
+    } else {
+      console.log('Clicking login button...');
+      await submitButton.click();
+    }
+    
+    console.log('Setting authentication token...');
     const token = DMM_TOKEN!;
     await page.evaluate(`localStorage.setItem('token', '${token}')`);
     
-    // Navigate to search with the TMDB ID
-    await page.goto(`${DMM_URL}/search?tmdbId=${tmdbId}&title=${encodeURIComponent(title)}`);
+    const searchUrl = `${DMM_URL}/search?tmdbId=${tmdbId}&title=${encodeURIComponent(title)}`;
+    console.log(`Navigating to search: ${searchUrl}`);
+    await page.goto(searchUrl, {
+      waitUntil: 'networkidle0',
+      timeout: 30000
+    });
     
-    // Wait for search results and click the first result (adjust selectors as needed)
-    await page.waitForSelector('.search-results');
-    await page.click('.search-result-item');
+    console.log('Waiting for search results...');
+    const searchResults = await page.waitForSelector('.search-results', {
+      timeout: 5000
+    }).catch(() => null);
+
+    if (!searchResults) {
+      console.log('Search results not found. Current URL:', page.url());
+      console.log('Page content:', await page.content());
+      throw new Error('Search results not found');
+    }
     
+    console.log('Clicking first search result...');
+    const firstResult = await page.waitForSelector('.search-result-item', {
+      timeout: 5000
+    }).catch(() => null);
+
+    if (!firstResult) {
+      throw new Error('No search results found');
+    }
+
+    await firstResult.click();
     console.log(`Successfully triggered search for ${title} (TMDB ID: ${tmdbId})`);
   } catch (error: unknown) {
     console.error('Error during browser automation:', error);
+    if (error instanceof Error) {
+      console.error('Stack trace:', error.stack);
+    }
     throw error;
   } finally {
+    console.log('Closing browser page...');
     await page.close();
   }
 }
