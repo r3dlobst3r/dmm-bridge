@@ -38,14 +38,19 @@ async function initBrowser() {
 }
 
 interface AuthData {
-  'rd:accessToken': string;
-  'rd:refreshToken': string;
-  'rd:clientId': string;
-  'rd:clientSecret': string;
-  'rd:castToken'?: string;
+  accessToken: string;
+  refreshToken: string;
+  clientId: string;
+  clientSecret: string;
 }
 
-const authData = {
+// Add type checking for environment variables
+if (!process.env.RD_ACCESS_TOKEN) throw new Error('RD_ACCESS_TOKEN is required');
+if (!process.env.RD_REFRESH_TOKEN) throw new Error('RD_REFRESH_TOKEN is required');
+if (!process.env.RD_CLIENT_ID) throw new Error('RD_CLIENT_ID is required');
+if (!process.env.RD_CLIENT_SECRET) throw new Error('RD_CLIENT_SECRET is required');
+
+const authData: AuthData = {
   accessToken: process.env.RD_ACCESS_TOKEN,
   refreshToken: process.env.RD_REFRESH_TOKEN,
   clientId: process.env.RD_CLIENT_ID,
@@ -56,7 +61,7 @@ async function setupAuth(page: puppeteer.Page) {
   console.log('Setting up authentication...');
   
   // Set the required localStorage values
-  await page.evaluate((data) => {
+  await page.evaluate((data: AuthData) => {
     localStorage.setItem('rd:accessToken', JSON.stringify({
       value: data.accessToken,
       expiry: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days from now
