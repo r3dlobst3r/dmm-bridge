@@ -1,5 +1,5 @@
 import express from 'express';
-import axios, { AxiosError } from 'axios';
+import puppeteer from 'puppeteer';
 
 const app = express();
 app.use(express.json());
@@ -17,6 +17,51 @@ console.log('Starting DMM-Overseerr bridge with configuration:');
 console.log(`DMM URL: ${DMM_URL}`);
 console.log(`Overseerr URL: ${OVERSEERR_URL}`);
 
+let browser: puppeteer.Browser | null = null;
+
+async function initBrowser() {
+  if (!browser) {
+    browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      headless: 'new'
+    });
+  }
+  return browser;
+}
+
+async function searchDMM(tmdbId: string, title: string) {
+  const browser = await initBrowser();
+  const page = await browser.newPage();
+  
+  try {
+    // Navigate to DMM
+    await page.goto(DMM_URL);
+    
+    // Wait for and click the login button (you'll need to adjust these selectors)
+    await page.waitForSelector('button[type="submit"]');
+    await page.click('button[type="submit"]');
+    
+    // Set the auth token (you might need to adjust this based on DMM's authentication method)
+    await page.evaluate((token) => {
+      localStorage.setItem('token', token);
+    }, DMM_TOKEN);
+    
+    // Navigate to search with the TMDB ID
+    await page.goto(`${DMM_URL}/search?tmdbId=${tmdbId}&title=${encodeURIComponent(title)}`);
+    
+    // Wait for search results and click the first result (adjust selectors as needed)
+    await page.waitForSelector('.search-results');
+    await page.click('.search-result-item');
+    
+    console.log(`Successfully triggered search for ${title} (TMDB ID: ${tmdbId})`);
+  } catch (error) {
+    console.error('Error during browser automation:', error);
+    throw error;
+  } finally {
+    await page.close();
+  }
+}
+
 app.post('/webhook', async (req, res) => {
   console.log('Received webhook:', JSON.stringify(req.body, null, 2));
   const { notification_type, media, subject } = req.body;
@@ -24,30 +69,13 @@ app.post('/webhook', async (req, res) => {
   if (notification_type === 'MEDIA_AUTO_APPROVED' || notification_type === 'MEDIA_APPROVED') {
     console.log(`Processing ${notification_type} for media:`, media);
     try {
-      // Since there's no official API, we'll need to simulate a browser request
-      const searchParams = new URLSearchParams({
-        tmdbId: media.tmdbId,
-        title: subject
-      });
-
-      console.log(`Attempting to access DMM at: ${DMM_URL}/search?${searchParams}`);
-      
-      // Note: This might not work since DMM likely requires authentication
-      const response = await axios.get(`${DMM_URL}/search?${searchParams}`, {
-        headers: {
-          'Authorization': `Bearer ${DMM_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log('DMM Response:', response.data);
+      await searchDMM(media.tmdbId, subject);
       res.status(200).json({ success: true });
     } catch (error) {
-      const axiosError = error as AxiosError;
-      console.error('Error accessing DMM:', axiosError.response?.data || axiosError.message);
+      console.error('Error processing request:', error);
       res.status(500).json({ 
         error: 'Failed to process request',
-        details: axiosError.response?.data || axiosError.message 
+        details: error.message 
       });
     }
   } else {
@@ -60,4 +88,12 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`DMM-Overseerr bridge listening on port ${PORT}`);
   console.log('Waiting for webhooks from Overseerr...');
+});
+
+// Cleanup on exit
+process.on('SIGINT', async () => {
+  if (browser) {
+    await browser.close();
+  }
+  process.exit();
 });
