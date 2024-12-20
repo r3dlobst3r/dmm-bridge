@@ -81,21 +81,33 @@ async function searchDMM(tmdbId: string, title: string) {
   const page = await browser.newPage();
   
   try {
-    // First set up authentication
+    // First navigate to the main page
     await page.goto(DMM_URL!, { waitUntil: 'networkidle0' });
+    
+    // Click the "Login with Real Debrid" button
+    console.log('Looking for Real Debrid login button...');
+    const loginButton = await page.waitForSelector('button:has-text("Login with Real Debrid")', {
+      visible: true,
+      timeout: 10000
+    });
+    
+    if (!loginButton) {
+      throw new Error('Login button not found');
+    }
+    
+    await loginButton.click();
+    console.log('Clicked login button');
+
+    // Wait for authentication to complete
     await setupAuth(page);
     
-    // Wait for the page to be fully loaded
-    await page.waitForSelector('body', { timeout: 5000 });
+    // Wait for the page to be fully loaded after auth
+    console.log('Waiting for page to load after auth...');
+    await page.waitForNavigation({ waitUntil: 'networkidle0' });
     
-    // Debug: Log the current URL and page content
-    console.log('Current URL:', await page.url());
-    const pageContent = await page.content();
-    console.log('Page content:', pageContent);
-
-    // Wait for the search input with a more specific selector
+    // Now look for the search input
     console.log('Waiting for search input...');
-    const searchInput = await page.waitForSelector('input[type="text"][placeholder="Search movies & shows..."]', {
+    const searchInput = await page.waitForSelector('input[placeholder="Search movies & shows..."]', {
       visible: true,
       timeout: 10000
     });
@@ -104,9 +116,7 @@ async function searchDMM(tmdbId: string, title: string) {
       throw new Error('Search input not found');
     }
 
-    // Clear any existing text and type the search query
-    await searchInput.click({ clickCount: 3 }); // Select all existing text
-    await searchInput.press('Backspace'); // Clear the selection
+    // Type the search query
     await searchInput.type(title);
     
     // Click the search button
