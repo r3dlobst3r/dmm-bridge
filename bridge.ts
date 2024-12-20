@@ -1,5 +1,5 @@
 import express from 'express';
-import puppeteer from 'puppeteer';
+import * as puppeteer from 'puppeteer';
 
 const app = express();
 app.use(express.json());
@@ -23,7 +23,7 @@ async function initBrowser() {
   if (!browser) {
     browser = await puppeteer.launch({
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      headless: 'new'
+      headless: true
     });
   }
   return browser;
@@ -42,8 +42,8 @@ async function searchDMM(tmdbId: string, title: string) {
     await page.click('button[type="submit"]');
     
     // Set the auth token (you might need to adjust this based on DMM's authentication method)
-    await page.evaluate((token) => {
-      localStorage.setItem('token', token);
+    await page.evaluate((authToken: string) => {
+      localStorage.setItem('token', authToken);
     }, DMM_TOKEN);
     
     // Navigate to search with the TMDB ID
@@ -54,7 +54,7 @@ async function searchDMM(tmdbId: string, title: string) {
     await page.click('.search-result-item');
     
     console.log(`Successfully triggered search for ${title} (TMDB ID: ${tmdbId})`);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error during browser automation:', error);
     throw error;
   } finally {
@@ -71,11 +71,12 @@ app.post('/webhook', async (req, res) => {
     try {
       await searchDMM(media.tmdbId, subject);
       res.status(200).json({ success: true });
-    } catch (error) {
-      console.error('Error processing request:', error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error processing request:', errorMessage);
       res.status(500).json({ 
         error: 'Failed to process request',
-        details: error.message 
+        details: errorMessage 
       });
     }
   } else {
