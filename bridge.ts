@@ -37,20 +37,28 @@ async function initBrowser() {
   return browser;
 }
 
+interface AuthData {
+  'rd:accessToken': string;
+  'rd:refreshToken': string;
+  'rd:clientId': string;
+  'rd:clientSecret': string;
+  'rd:castToken'?: string;
+}
+
 async function setupAuth(page: puppeteer.Page) {
   console.log('Setting up authentication...');
   
   // Calculate token expiry (30 days from now)
   const expiryDate = Date.now() + (30 * 24 * 60 * 60 * 1000);
   
-  const authData = {
+  const authData: AuthData = {
     'rd:accessToken': JSON.stringify({
       value: RD_ACCESS_TOKEN,
       expiry: expiryDate
     }),
-    'rd:refreshToken': RD_REFRESH_TOKEN,
-    'rd:clientId': RD_CLIENT_ID,
-    'rd:clientSecret': RD_CLIENT_SECRET
+    'rd:refreshToken': RD_REFRESH_TOKEN!,
+    'rd:clientId': RD_CLIENT_ID!,
+    'rd:clientSecret': RD_CLIENT_SECRET!
   };
 
   if (RD_CAST_TOKEN) {
@@ -58,7 +66,7 @@ async function setupAuth(page: puppeteer.Page) {
   }
 
   // Set all auth data in localStorage
-  await page.evaluate((data) => {
+  await page.evaluate((data: AuthData) => {
     for (const [key, value] of Object.entries(data)) {
       localStorage.setItem(key, value);
     }
