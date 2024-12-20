@@ -48,31 +48,28 @@ interface AuthData {
 async function setupAuth(page: puppeteer.Page) {
   console.log('Setting up authentication...');
   
-  // Calculate token expiry (30 days from now)
-  const expiryDate = Date.now() + (30 * 24 * 60 * 60 * 1000);
-  
-  const authData: AuthData = {
-    'rd:accessToken': JSON.stringify({
-      value: RD_ACCESS_TOKEN,
-      expiry: expiryDate
-    }),
-    'rd:refreshToken': RD_REFRESH_TOKEN!,
-    'rd:clientId': RD_CLIENT_ID!,
-    'rd:clientSecret': RD_CLIENT_SECRET!
-  };
-
-  if (RD_CAST_TOKEN) {
-    authData['rd:castToken'] = RD_CAST_TOKEN;
-  }
-
-  // Set all auth data in localStorage
-  await page.evaluate((data: AuthData) => {
-    for (const [key, value] of Object.entries(data)) {
-      localStorage.setItem(key, value);
-    }
+  // Set the required localStorage values
+  await page.evaluate((data) => {
+    localStorage.setItem('rd:accessToken', JSON.stringify({
+      value: data.accessToken,
+      expiry: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days from now
+    }));
+    localStorage.setItem('rd:refreshToken', data.refreshToken);
+    localStorage.setItem('rd:clientId', data.clientId);
+    localStorage.setItem('rd:clientSecret', data.clientSecret);
   }, authData);
   
-  console.log('Authentication data set successfully');
+  // Reload the page to apply authentication
+  console.log('Reloading page to apply authentication...');
+  await page.reload({ waitUntil: 'networkidle0' });
+  
+  // Wait for the authenticated state
+  console.log('Waiting for authenticated state...');
+  await page.waitForFunction(() => {
+    return !document.querySelector('button:has-text("Login with Real Debrid")');
+  }, { timeout: 10000 });
+
+  console.log('Authentication completed successfully');
 }
 
 async function searchDMM(tmdbId: string, title: string) {
@@ -81,29 +78,12 @@ async function searchDMM(tmdbId: string, title: string) {
   const page = await browser.newPage();
   
   try {
-    // First navigate to the main page
+    // First navigate and authenticate
     await page.goto(DMM_URL!, { waitUntil: 'networkidle0' });
-    
-    // Click the "Login with Real Debrid" button
-    console.log('Looking for Real Debrid login button...');
-    const loginButton = await page.waitForSelector('button:has-text("Login with Real Debrid")', {
-      visible: true,
-      timeout: 10000
-    });
-    
-    if (!loginButton) {
-      throw new Error('Login button not found');
-    }
-    
-    await loginButton.click();
-    console.log('Clicked login button');
-
-    // Wait for authentication to complete
     await setupAuth(page);
     
-    // Wait for the page to be fully loaded after auth
-    console.log('Waiting for page to load after auth...');
-    await page.waitForNavigation({ waitUntil: 'networkidle0' });
+    // Wait a moment for the UI to stabilize
+    await page.waitForTimeout(2000);
     
     // Now look for the search input
     console.log('Waiting for search input...');
