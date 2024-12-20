@@ -1,5 +1,5 @@
 import express from 'express';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 const app = express();
 app.use(express.json());
@@ -43,10 +43,11 @@ app.post('/webhook', async (req, res) => {
       console.log('DMM Response:', response.data);
       res.status(200).json({ success: true });
     } catch (error) {
-      console.error('Error accessing DMM:', error.response?.data || error.message);
+      const axiosError = error as AxiosError;
+      console.error('Error accessing DMM:', axiosError.response?.data || axiosError.message);
       res.status(500).json({ 
         error: 'Failed to process request',
-        details: error.response?.data || error.message 
+        details: axiosError.response?.data || axiosError.message 
       });
     }
   } else {
