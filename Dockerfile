@@ -3,12 +3,13 @@ FROM node:18-alpine
 WORKDIR /app
 
 COPY package*.json ./
-COPY tsconfig.json ./
-COPY src ./src
+COPY bridge.ts ./
 
 RUN npm install
-RUN npm run build
 
-EXPOSE 3000
+# Compile TypeScript
+RUN npm install -g typescript
+RUN tsc bridge.ts
 
-CMD ["npm", "start"]
+# Start the application
+CMD ["node", "bridge.js"]
