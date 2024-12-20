@@ -5,17 +5,18 @@ const app = express();
 app.use(express.json());
 
 const DMM_URL = process.env.DMM_URL;
-const DMM_TOKEN = process.env.DMM_TOKEN;
-const OVERSEERR_URL = process.env.OVERSEERR_URL;
-const OVERSEERR_API_KEY = process.env.OVERSEERR_API_KEY;
+const RD_ACCESS_TOKEN = process.env.RD_ACCESS_TOKEN;
+const RD_REFRESH_TOKEN = process.env.RD_REFRESH_TOKEN;
+const RD_CLIENT_ID = process.env.RD_CLIENT_ID;
+const RD_CLIENT_SECRET = process.env.RD_CLIENT_SECRET;
+const RD_CAST_TOKEN = process.env.RD_CAST_TOKEN;
 
-if (!DMM_URL || !DMM_TOKEN || !OVERSEERR_URL || !OVERSEERR_API_KEY) {
+if (!DMM_URL || !RD_ACCESS_TOKEN || !RD_REFRESH_TOKEN || !RD_CLIENT_ID || !RD_CLIENT_SECRET) {
   throw new Error('Missing required environment variables');
 }
 
 console.log('Starting DMM-Overseerr bridge with configuration:');
 console.log(`DMM URL: ${DMM_URL}`);
-console.log(`Overseerr URL: ${OVERSEERR_URL}`);
 
 let browser: puppeteer.Browser | null = null;
 
@@ -36,37 +37,48 @@ async function initBrowser() {
   return browser;
 }
 
+async function setupAuth(page: puppeteer.Page) {
+  console.log('Setting up authentication...');
+  
+  // Calculate token expiry (30 days from now)
+  const expiryDate = Date.now() + (30 * 24 * 60 * 60 * 1000);
+  
+  const authData = {
+    'rd:accessToken': JSON.stringify({
+      value: RD_ACCESS_TOKEN,
+      expiry: expiryDate
+    }),
+    'rd:refreshToken': RD_REFRESH_TOKEN,
+    'rd:clientId': RD_CLIENT_ID,
+    'rd:clientSecret': RD_CLIENT_SECRET
+  };
+
+  if (RD_CAST_TOKEN) {
+    authData['rd:castToken'] = RD_CAST_TOKEN;
+  }
+
+  // Set all auth data in localStorage
+  await page.evaluate((data) => {
+    for (const [key, value] of Object.entries(data)) {
+      localStorage.setItem(key, value);
+    }
+  }, authData);
+  
+  console.log('Authentication data set successfully');
+}
+
 async function searchDMM(tmdbId: string, title: string) {
   console.log('Starting DMM search process...');
   const browser = await initBrowser();
   const page = await browser.newPage();
   
   try {
-    console.log(`Navigating to DMM: ${DMM_URL}`);
-    const response = await page.goto(DMM_URL!, {
-      waitUntil: 'networkidle0',
-      timeout: 30000
-    });
+    // First set up authentication
+    await page.goto(DMM_URL!, { waitUntil: 'networkidle0' });
+    await setupAuth(page);
     
-    if (!response) {
-      throw new Error('Failed to get response from DMM');
-    }
-    
-    console.log('Looking for login button...');
-    const submitButton = await page.waitForSelector('button[type="submit"]', {
-      timeout: 5000
-    }).catch(() => null);
-
-    if (!submitButton) {
-      console.log('Login button not found, attempting to proceed without login...');
-    } else {
-      console.log('Clicking login button...');
-      await submitButton.click();
-    }
-    
-    console.log('Setting authentication token...');
-    const token = DMM_TOKEN!;
-    await page.evaluate(`localStorage.setItem('token', '${token}')`);
+    // Refresh the page to apply auth
+    await page.reload({ waitUntil: 'networkidle0' });
     
     const searchUrl = `${DMM_URL}/search?tmdbId=${tmdbId}&title=${encodeURIComponent(title)}`;
     console.log(`Navigating to search: ${searchUrl}`);
