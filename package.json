@@ -1,0 +1,20 @@
+{
+    "name": "dmm-overseerr-bridge",
+    "version": "1.0.0",
+    "main": "dist/bridge.js",
+    "scripts": {
+      "build": "tsc",
+      "start": "node dist/bridge.js",
+      "dev": "ts-node src/bridge.ts"
+    },
+    "dependencies": {
+      "axios": "^1.6.8",
+      "express": "^4.18.2"
+    },
+    "devDependencies": {
+      "@types/express": "^4.17.21",
+      "@types/node": "^20.11.0",
+      "ts-node": "^10.9.2",
+      "typescript": "^5.3.3"
+    }
+  }

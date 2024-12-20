@@ -1,0 +1,12 @@
+services:
+  dmm-overseerr-bridge:
+    build: .
+    container_name: dmm-overseerr-bridge
+    environment:
+      - DMM_URL=https://debridmediamanager.com
+      - DMM_TOKEN=your_rd_or_ad_token
+      - OVERSEERR_URL=http://overseerr:5055
+      - OVERSEERR_API_KEY=your_overseerr_api_key
+    volumes:
+      - ./config:/app/config
+    restart: unless-stopped
