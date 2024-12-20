@@ -18,36 +18,36 @@ console.log(`DMM URL: ${DMM_URL}`);
 console.log(`Overseerr URL: ${OVERSEERR_URL}`);
 
 app.post('/webhook', async (req, res) => {
-  console.log('Received webhook:', req.body);
-  const { notification_type, media } = req.body;
+  console.log('Received webhook:', JSON.stringify(req.body, null, 2));
+  const { notification_type, media, subject } = req.body;
   
   if (notification_type === 'MEDIA_AUTO_APPROVED' || notification_type === 'MEDIA_APPROVED') {
     console.log(`Processing ${notification_type} for media:`, media);
     try {
-      // Handle movie requests
-      if (media.media_type === 'movie') {
-        console.log(`Sending movie request to DMM for TMDB ID: ${media.tmdbId}`);
-        await axios.get(`${DMM_URL}/movie/${media.tmdbId}`, {
-          headers: {
-            Authorization: `Bearer ${DMM_TOKEN}`
-          }
-        });
-      }
-      // Handle TV show requests
-      else if (media.media_type === 'tv') {
-        console.log(`Sending TV show request to DMM for TMDB ID: ${media.tmdbId}`);
-        await axios.get(`${DMM_URL}/show/${media.tmdbId}`, {
-          headers: {
-            Authorization: `Bearer ${DMM_TOKEN}`
-          }
-        });
-      }
+      // Since there's no official API, we'll need to simulate a browser request
+      const searchParams = new URLSearchParams({
+        tmdbId: media.tmdbId,
+        title: subject
+      });
+
+      console.log(`Attempting to access DMM at: ${DMM_URL}/search?${searchParams}`);
       
-      console.log('Successfully processed request');
+      // Note: This might not work since DMM likely requires authentication
+      const response = await axios.get(`${DMM_URL}/search?${searchParams}`, {
+        headers: {
+          'Authorization': `Bearer ${DMM_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('DMM Response:', response.data);
       res.status(200).json({ success: true });
     } catch (error) {
-      console.error('Error processing webhook:', error);
-      res.status(500).json({ error: 'Failed to process request' });
+      console.error('Error accessing DMM:', error.response?.data || error.message);
+      res.status(500).json({ 
+        error: 'Failed to process request',
+        details: error.response?.data || error.message 
+      });
     }
   } else {
     console.log(`Ignoring notification of type: ${notification_type}`);
